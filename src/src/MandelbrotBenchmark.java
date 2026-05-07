@@ -26,7 +26,7 @@ public class MandelbrotBenchmark {
 
         // This can be changed to test different thread counts.
         RenderSettings oneThreadSettings = copyWithThreads(baseSettings, 1);
-        RenderSettings fourThreadSettings = copyWithThreads(baseSettings, 4);
+        RenderSettings fourThreadSettings = copyWithThreads(baseSettings, baseSettings.numberOfThreads);
 
         long oneThreadAverage = averageRenderTime(
                 oneThreadSettings,
@@ -45,7 +45,8 @@ public class MandelbrotBenchmark {
         return new BenchmarkResult(
                 oneThreadAverage,
                 fourThreadAverage,
-                speedup
+                speedup,
+                baseSettings
         );
     }
 
@@ -87,23 +88,27 @@ public class MandelbrotBenchmark {
         private final long oneThreadTimeMs;
         private final long fourThreadTimeMs;
         private final double speedup;
+        private final RenderSettings settings;
 
         public BenchmarkResult(
                 long oneThreadTimeMs,
                 long fourThreadTimeMs,
-                double speedup
+                double speedup,
+                RenderSettings settings
         ) {
             this.oneThreadTimeMs = oneThreadTimeMs;
             this.fourThreadTimeMs = fourThreadTimeMs;
             this.speedup = speedup;
+            this.settings = settings;
         }
 
 
         public void print() {
             System.out.println("===== Mandelbrot Benchmark =====");
-            System.out.println("Average render time with 1 thread:  " + oneThreadTimeMs + " ms");
-            System.out.println("Average render time with 4 threads: " + fourThreadTimeMs + " ms");
+            System.out.println("Average render time with " + 1 + " thread:  " + oneThreadTimeMs + " ms");
+            System.out.println("Average render time with "  + settings.numberOfThreads + " threads: " + fourThreadTimeMs + " ms");
             System.out.printf("Speedup: %.2fx%n", speedup);
+            System.out.println("Iterations: " + settings.maxCount);
         }
     }
 }
