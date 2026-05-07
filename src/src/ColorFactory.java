@@ -1,5 +1,8 @@
 import java.awt.Color;
 
+/**
+ * Factory for creating color palettes.
+ */
 public final class ColorFactory {
     private static final int[][][] COLPAL = {
             {{12, 0, 10, 20}, {12, 50, 100, 240}, {12, 20, 3, 26}, {12, 230, 60, 20},

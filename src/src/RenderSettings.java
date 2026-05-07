@@ -1,5 +1,6 @@
 /**
- * Now every rendering thread can have its own settings, and we can easily pass them around without worrying about synchronization.
+ * Each rendering thread can have its own settings, and we can easily pass them around without worrying about synchronization.
+ * Immutable and thread-safe, as it only contains final fields and does not allow modification after creation.
  */
 public final class RenderSettings {
 

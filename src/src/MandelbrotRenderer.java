@@ -1,8 +1,14 @@
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class MandelbrotRenderer {
 
@@ -13,6 +19,10 @@ public final class MandelbrotRenderer {
     }
 
     public RenderResult render(int width, int height, RenderSettings settings) throws InterruptedException {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedException("Render was cancelled before it started.");
+        }
+
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 
         long startTime = System.nanoTime();
@@ -20,22 +30,53 @@ public final class MandelbrotRenderer {
         int threads = Math.max(1, Math.min(settings.numberOfThreads, height));
         ExecutorService executor = Executors.newFixedThreadPool(threads);
 
-        int rowsPerThread = height / threads;
+        // Atomic Ticket Machine: each thread atomically gets the next row to render until all rows are done. This allows for better load balancing if some rows take longer to render than others.
+        AtomicInteger nextRow = new AtomicInteger(0);
+        List<Callable<Void>> tasks = new ArrayList<>(threads);
 
         for (int i = 0; i < threads; i++) {
-            int yStart = i * rowsPerThread;
-            int yEnd = (i == threads - 1) ? height : yStart + rowsPerThread;
+            tasks.add(() -> {
+                while (true) {
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw new InterruptedException("Render task was cancelled.");
+                    }
 
-            executor.submit(new MandelbrotTask(yStart, yEnd, width, height, image, settings));
+                    int y = nextRow.getAndIncrement();
+
+                    if (y >= height) {
+                        break;
+                    }
+
+                    renderRow(y, width, height, image, settings);
+                }
+
+                return null;
+            });
         }
 
-        executor.shutdown();
-
         try {
-            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+            List<Future<Void>> futures = executor.invokeAll(tasks);
+
+            for (Future<Void> future : futures) {
+                try {
+                    future.get();
+                } catch (CancellationException e) {
+                    throw new InterruptedException("Render task was cancelled.");
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+
+                    if (cause instanceof InterruptedException) {
+                        throw (InterruptedException) cause;
+                    }
+
+                    throw new IllegalStateException("Mandelbrot render task failed.", cause);
+                }
+            }
         } catch (InterruptedException e) {
             executor.shutdownNow();
             throw e;
+        } finally {
+            executor.shutdownNow();
         }
 
         long endTime = System.nanoTime();
@@ -44,52 +85,34 @@ public final class MandelbrotRenderer {
         return new RenderResult(image, renderTimeMs);
     }
 
-    private final class MandelbrotTask implements Runnable {
-        private final int yStart;
-        private final int yEnd;
-        private final int width;
-        private final int height;
-        private final BufferedImage image;
-        private final RenderSettings settings;
+    private void renderRow(
+            int y,
+            int width,
+            int height,
+            BufferedImage image,
+            RenderSettings settings
+    ) throws InterruptedException {
+        double r = settings.zoom / Math.min(width, height);
 
-        private MandelbrotTask(
-                int yStart,
-                int yEnd,
-                int width,
-                int height,
-                BufferedImage image,
-                RenderSettings settings
-        ) {
-            this.yStart = yStart;
-            this.yEnd = yEnd;
-            this.width = width;
-            this.height = height;
-            this.image = image;
-            this.settings = settings;
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedException("Render row was cancelled.");
         }
 
-        @Override
-        public void run() {
-            double r = settings.zoom / Math.min(width, height);
-
-            for (int y = yStart; y < yEnd; y++) {
-                if (Thread.currentThread().isInterrupted()) {
-                    return;
-                }
-
-                for (int x = 0; x < width; x++) {
-                    double dx = 2.5 * (x * r + settings.viewX) - 2;
-                    double dy = 1.25 - 2.5 * (y * r + settings.viewY);
-
-                    Color color = color(dx, dy, settings);
-
-                    if (settings.antialias) {
-                        color = antialiasColor(dx, dy, r, color, settings);
-                    }
-
-                    image.setRGB(x, y, color.getRGB());
-                }
+        for (int x = 0; x < width; x++) {
+            if ((x & 31) == 0 && Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException("Render row was cancelled.");
             }
+
+            double dx = 2.5 * (x * r + settings.viewX) - 2;
+            double dy = 1.25 - 2.5 * (y * r + settings.viewY);
+
+            Color color = color(dx, dy, settings);
+
+            if (settings.antialias) {
+                color = antialiasColor(dx, dy, r, color, settings);
+            }
+
+            image.setRGB(x, y, color.getRGB());
         }
     }
 

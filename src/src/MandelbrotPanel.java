@@ -14,27 +14,32 @@ import java.awt.image.BufferedImage;
 public final class MandelbrotPanel extends JPanel
         implements MouseListener, MouseMotionListener, KeyListener, Runnable {
 
-    private int numberOfThreads = 4;
-    private long lastRenderTimeMs = 0;
+    private volatile int numberOfThreads = 4;
+    private volatile long lastRenderTimeMs = 0;
 
-    private int maxCount = 192;
-    private boolean smooth = false;
-    private boolean antialias = false;
+    private volatile int maxCount = 192;
+    private volatile boolean smooth = false;
+    private volatile boolean antialias = false;
 
     private boolean toDrag = false;
     private boolean rect = true;
 
-    private int paletteIndex = 0;
+    private volatile int paletteIndex = 0;
 
-    private double viewX = 0.0;
-    private double viewY = 0.0;
-    private double zoom = 1.0;
+    private volatile double viewX = 0.0;
+    private volatile double viewY = 0.0;
+    private volatile double zoom = 1.0;
 
-    private BufferedImage image;
-    private int width;
-    private int height;
+    private volatile BufferedImage image;
+    private volatile int width;
+    private volatile int height;
 
-    private volatile Thread thread = null;
+    private final Object renderLock = new Object();
+
+    private Thread thread;
+    private boolean redrawRequested = false;
+    private boolean rendering = false;
+    private boolean stopped = false;
 
     private int mouseX;
     private int mouseY;
@@ -55,19 +60,25 @@ public final class MandelbrotPanel extends JPanel
         redraw();
     }
 
-    public void destroy() {
-        Thread currentThread = thread;
-        thread = null;
+    private void redraw() {
+        synchronized (renderLock) {
+            startRenderThreadIfNeeded();
 
-        if (currentThread != null) {
-            currentThread.interrupt();
+            redrawRequested = true;
+            renderLock.notifyAll();
+
+            // Only interrupt if the thread is actively rendering.
+            // Waiting is handled by notifyAll(), not by interrupt().
+            if (rendering && thread != null) {
+                thread.interrupt();
+            }
         }
     }
 
-    private void redraw() {
-        if (thread != null && thread.isAlive()) {
-            thread.interrupt();
-        } else {
+    private void startRenderThreadIfNeeded() {
+        if (thread == null || !thread.isAlive()) {
+            stopped = false;
+
             thread = new Thread(this, "Mandelbrot render thread");
             thread.setPriority(Thread.MIN_PRIORITY);
             thread.start();
@@ -76,17 +87,39 @@ public final class MandelbrotPanel extends JPanel
 
     @Override
     public void run() {
-        while (thread != null) {
-            while (draw()) {
-                // Redraw immediately if the previous render was interrupted.
+        while (true) {
+            synchronized (renderLock) {
+                while (!redrawRequested && !stopped) {
+                    try {
+                        renderLock.wait();
+                    } catch (InterruptedException e) {
+                        // Continue and check stopped/redrawRequested again.
+                    }
+                }
+
+                if (stopped) {
+                    return;
+                }
+
+                redrawRequested = false;
+                rendering = true;
             }
 
-            synchronized (this) {
-                try {
-                    wait();
-                } catch (InterruptedException e) {
-                    // A redraw request interrupts the waiting render thread.
+            boolean interrupted = draw();
+
+            synchronized (renderLock) {
+                rendering = false;
+
+                if (stopped) {
+                    return;
                 }
+
+                if (interrupted) {
+                    redrawRequested = true;
+                }
+
+                // Clear the interrupt flag before the next render cycle.
+                Thread.interrupted();
             }
         }
     }
@@ -122,6 +155,25 @@ public final class MandelbrotPanel extends JPanel
 
         repaint();
         return false;
+    }
+
+    @Override
+    public void removeNotify() {
+        stopRenderThread();
+        super.removeNotify();
+    }
+
+    // Ensure the render thread is stopped when the panel is removed from the UI.
+    private void stopRenderThread() {
+        synchronized (renderLock) {
+            stopped = true;
+            redrawRequested = false;
+            renderLock.notifyAll();
+
+            if (thread != null) {
+                thread.interrupt();
+            }
+        }
     }
 
     @Override
@@ -278,6 +330,15 @@ public final class MandelbrotPanel extends JPanel
         } else if (keyCode == KeyEvent.VK_C) {
             changeMaxIterations(e.isShiftDown());
             redraw();
+        } else if (e.getKeyChar() == 'b' || e.getKeyChar() == 'B') {
+            new Thread(() -> {
+                try {
+                    runBenchmark();
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    System.out.println("Benchmark was interrupted.");
+                }
+            }, "mandelbrot-benchmark").start();
         } else if (keyCode == KeyEvent.VK_SHIFT) {
             rect = false;
 
@@ -339,6 +400,31 @@ public final class MandelbrotPanel extends JPanel
                 repaint();
             }
         }
+    }
+
+    public void runBenchmark() throws InterruptedException {
+        RenderSettings settings = new RenderSettings(
+                maxCount,
+                numberOfThreads,
+                smooth,
+                antialias,
+                paletteIndex,
+                viewX,
+                viewY,
+                zoom
+        );
+
+        MandelbrotRenderer benchmarkRenderer = new MandelbrotRenderer(colors);
+
+        MandelbrotBenchmark benchmark = new MandelbrotBenchmark(
+                benchmarkRenderer,
+                getWidth(),
+                getHeight(),
+                settings
+        );
+
+        MandelbrotBenchmark.BenchmarkResult result = benchmark.run();
+        result.print();
     }
 
     @Override
