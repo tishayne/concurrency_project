@@ -1,5 +1,6 @@
 /**
- * This is to show that 4 cores are more than twice as fast as 1 core for rendering the Mandelbrot set.
+ * Rendering Time and Speedup between two Thread Counts.
+ * Between 1 thread and configured number of threads when running the benchmark in the application..
  */
 public class MandelbrotBenchmark {
 
@@ -24,7 +25,7 @@ public class MandelbrotBenchmark {
         int warmupRuns = 2;
         int measuredRuns = 5;
 
-        // This can be changed to test different thread counts.
+        // This could also be changed to test different thread counts.
         RenderSettings oneThreadSettings = copyWithThreads(baseSettings, 1);
         RenderSettings fourThreadSettings = copyWithThreads(baseSettings, baseSettings.numberOfThreads);
 

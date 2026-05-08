@@ -11,9 +11,16 @@ import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.awt.image.BufferedImage;
 
+/**
+ * Swing panel displaying and contorlling the Mandelbrot set rendering.
+ * It has two main responsibilities:
+ * 1. Handling user input
+ * 2. Managing the background rendering thread and ensuring the UI remains responsive during rendering.
+ */
 public final class MandelbrotPanel extends JPanel
         implements MouseListener, MouseMotionListener, KeyListener, Runnable {
 
+    // Volatile because these values are read and written by different threads.
     private volatile int numberOfThreads = 4;
     private volatile long lastRenderTimeMs = 0;
 
@@ -34,11 +41,12 @@ public final class MandelbrotPanel extends JPanel
     private volatile int width;
     private volatile int height;
 
+    // Lock object to synchronize access to the rendering thread.
     private final Object renderLock = new Object();
 
     private Thread thread;
     private boolean redrawRequested = false;
-    private boolean rendering = false;
+    private boolean isRendering = false;
     private boolean stopped = false;
 
     private int mouseX;
@@ -60,6 +68,10 @@ public final class MandelbrotPanel extends JPanel
         redraw();
     }
 
+    /**
+     * Requests a new render.
+     * Called after any user iteraction that changes the view.
+     */
     private void redraw() {
         synchronized (renderLock) {
             startRenderThreadIfNeeded();
@@ -68,13 +80,15 @@ public final class MandelbrotPanel extends JPanel
             renderLock.notifyAll();
 
             // Only interrupt if the thread is actively rendering.
-            // Waiting is handled by notifyAll(), not by interrupt().
-            if (rendering && thread != null) {
+            if (isRendering && thread != null) {
                 thread.interrupt();
             }
         }
     }
 
+    /**
+     * Creates the background render thread.
+     */
     private void startRenderThreadIfNeeded() {
         if (thread == null || !thread.isAlive()) {
             stopped = false;
@@ -102,18 +116,18 @@ public final class MandelbrotPanel extends JPanel
                 }
 
                 redrawRequested = false;
-                rendering = true;
+                isRendering = true;
             }
 
             boolean interrupted = draw();
 
             synchronized (renderLock) {
-                rendering = false;
+                isRendering = false;
 
                 if (stopped) {
                     return;
                 }
-
+                // Render result has become outdated.
                 if (interrupted) {
                     redrawRequested = true;
                 }
@@ -124,6 +138,11 @@ public final class MandelbrotPanel extends JPanel
         }
     }
 
+    /**
+     * Performs the actual rendering of the Mandelbrot set using the current settings.
+     *
+     * @return true if the render was interrupted and the result is outdated, false otherwise.
+     */
     private boolean draw() {
         Dimension size = getSize();
 
@@ -176,6 +195,11 @@ public final class MandelbrotPanel extends JPanel
         }
     }
 
+    /**
+     * Paints the Mandelbrot image and overlays the status text and drag rectangle/line if needed.
+     *
+     * @param g the <code>Graphics</code> object to protect
+     */
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -186,6 +210,7 @@ public final class MandelbrotPanel extends JPanel
 
         Dimension size = getSize();
 
+        // If panel was resized, request new render.
         if (size.width != width || size.height != height) {
             redraw();
             return;
@@ -302,6 +327,23 @@ public final class MandelbrotPanel extends JPanel
         }
     }
 
+    /**
+     * Keyboard controls:
+     * <p>
+     * ESC       Reset view
+     * I         Zoom in
+     * O         Zoom out
+     * P         Change palette
+     * Shift + P Previous palette
+     * S         Toggle smooth coloring
+     * A         Toggle antialiasing
+     * T         Increase thread count
+     * Shift + T Decrease thread count
+     * C         Increase max iterations
+     * Shift + C Decrease max iterations
+     * B         Run benchmark
+     * Shift     Temporarily switch from zoom rectangle to pan mode
+     */
     @Override
     public void keyPressed(KeyEvent e) {
         int keyCode = e.getKeyCode();

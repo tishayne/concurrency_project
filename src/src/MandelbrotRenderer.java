@@ -30,7 +30,8 @@ public final class MandelbrotRenderer {
         int threads = Math.max(1, Math.min(settings.numberOfThreads, height));
         ExecutorService executor = Executors.newFixedThreadPool(threads);
 
-        // Atomic Ticket Machine: each thread atomically gets the next row to render until all rows are done. This allows for better load balancing if some rows take longer to render than others.
+        // Atomic Ticket Machine: each thread atomically gets the next row to render until all rows are done.
+        // This allows for better load balancing if some rows take longer to render than others.
         AtomicInteger nextRow = new AtomicInteger(0);
         List<Callable<Void>> tasks = new ArrayList<>(threads);
 
@@ -55,10 +56,12 @@ public final class MandelbrotRenderer {
         }
 
         try {
+            // Run all worker jobs and wait for them to finish.
             List<Future<Void>> futures = executor.invokeAll(tasks);
 
             for (Future<Void> future : futures) {
                 try {
+                    // Check if any worker failed.
                     future.get();
                 } catch (CancellationException e) {
                     throw new InterruptedException("Render task was cancelled.");
