@@ -6,11 +6,19 @@ import java.awt.image.BufferedImage;
  */
 public final class RenderResult {
 
-    public final BufferedImage image;
-    public final long renderTimeMs;
+    private final BufferedImage image;
+    private final long renderTimeMs;
 
     public RenderResult(BufferedImage image, long renderTimeMs) {
         this.image = image;
         this.renderTimeMs = renderTimeMs;
+    }
+
+    public BufferedImage getImage() {
+        return image;
+    }
+
+    public long getRenderTimeMs() {
+        return renderTimeMs;
     }
 }

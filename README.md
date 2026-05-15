@@ -18,6 +18,7 @@ src/
  ├── MandelbrotPanel.java
  ├── MandelbrotRenderer.java
  ├── MandelbrotBenchmark.java
+ ├── ColorFactory.java
  ├── RenderSettings.java
  └── RenderResult.java
 ```
@@ -32,7 +33,7 @@ To run the benchmark:
 1. Start the Mandelbrot application as above.
 2. Wait until the application window is visible.
 3. Press the **B** key.
-4. The benchmark result is printed in the console.
+4. The benchmark result with the current render settings is printed in the console.
 
 The benchmark compares the render time with **1 thread** against 4 threads. However this
 setting can be changed in the code where indicated. 
@@ -47,16 +48,16 @@ Speedup: 2.90x
 ```
 ## Shortcuts
 
-| Shortcut          | Action                                    |
-| ----------------- | ----------------------------------------- |
-| **B**             | Run the benchmark                         |
-| **S**             | Toggle smooth coloring                    |
-| **A**             | Toggle antialiasing                       |
-| **P**             | Change the color palette                  |
-| **+**             | Increase the maximum number of iterations |
-| **-**             | Decrease the maximum number of iterations |
-| **Arrow keys**    | Move the visible area                     |
-| **R**             | Reset the view                            |
-| **Esc**           | Cancel the current selection or action    |
-| **Mouse drag**    | Select an area or move the view           |
-| **Mouse release** | Apply the selected zoom or movement       |
+| Shortcut          | Action                                         |
+| ----------------- |------------------------------------------------|
+| **B**             | Run the benchmark with current render settings |
+| **S**             | Toggle smooth coloring                         |
+| **A**             | Toggle antialiasing                            |
+| **P**             | Change the color palette                       |
+| **+**             | Increase the maximum number of iterations      |
+| **-**             | Decrease the maximum number of iterations      |
+| **Arrow keys**    | Move the visible area                          |
+| **R**             | Reset the view                                 |
+| **Esc**           | Cancel the current selection or action         |
+| **Mouse drag**    | Select an area or move the view                |
+| **Mouse release** | Apply the selected zoom or movement            |

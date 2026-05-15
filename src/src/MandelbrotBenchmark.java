@@ -65,7 +65,7 @@ public class MandelbrotBenchmark {
 
         for (int i = 0; i < measuredRuns; i++) {
             RenderResult result = renderer.render(width, height, settings);
-            totalTime += result.renderTimeMs;
+            totalTime += result.getRenderTimeMs();
         }
 
         return totalTime / measuredRuns;

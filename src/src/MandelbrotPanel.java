@@ -18,7 +18,7 @@ import java.awt.image.BufferedImage;
  * 2. Managing the background rendering thread and ensuring the UI remains responsive during rendering.
  */
 public final class MandelbrotPanel extends JPanel
-        implements MouseListener, MouseMotionListener, KeyListener, Runnable {
+        implements MouseListener, MouseMotionListener, KeyListener {
 
     // Volatile because these values are read and written by different threads.
     private volatile int numberOfThreads = 4;
@@ -93,48 +93,9 @@ public final class MandelbrotPanel extends JPanel
         if (thread == null || !thread.isAlive()) {
             stopped = false;
 
-            thread = new Thread(this, "Mandelbrot render thread");
+            thread = new Thread(new RenderLoop(), "Mandelbrot render thread");
             thread.setPriority(Thread.MIN_PRIORITY);
             thread.start();
-        }
-    }
-
-    @Override
-    public void run() {
-        while (true) {
-            synchronized (renderLock) {
-                while (!redrawRequested && !stopped) {
-                    try {
-                        renderLock.wait();
-                    } catch (InterruptedException e) {
-                        // Continue and check stopped/redrawRequested again.
-                    }
-                }
-
-                if (stopped) {
-                    return;
-                }
-
-                redrawRequested = false;
-                isRendering = true;
-            }
-
-            boolean interrupted = draw();
-
-            synchronized (renderLock) {
-                isRendering = false;
-
-                if (stopped) {
-                    return;
-                }
-                // Render result has become outdated.
-                if (interrupted) {
-                    redrawRequested = true;
-                }
-
-                // Clear the interrupt flag before the next render cycle.
-                Thread.interrupted();
-            }
         }
     }
 
@@ -166,8 +127,8 @@ public final class MandelbrotPanel extends JPanel
 
         try {
             RenderResult result = renderer.render(width, height, settings);
-            image = result.image;
-            lastRenderTimeMs = result.renderTimeMs;
+            image = result.getImage();
+            lastRenderTimeMs = result.getRenderTimeMs();
         } catch (InterruptedException e) {
             return true;
         }
@@ -176,9 +137,51 @@ public final class MandelbrotPanel extends JPanel
         return false;
     }
 
+    private final class RenderLoop implements Runnable {
+
+        @Override
+        public void run() {
+            while (true) {
+                synchronized (renderLock) {
+                    while (!redrawRequested && !stopped) {
+                        try {
+                            renderLock.wait();
+                        } catch (InterruptedException e) {
+                            // Continue and check stopped/redrawRequested again.
+                        }
+                    }
+
+                    if (stopped) {
+                        return;
+                    }
+
+                    redrawRequested = false;
+                    isRendering = true;
+                }
+
+                boolean interrupted = draw();
+
+                synchronized (renderLock) {
+                    isRendering = false;
+
+                    if (stopped) {
+                        return;
+                    }
+
+                    if (interrupted) {
+                        redrawRequested = true;
+                    }
+
+                    Thread.interrupted();
+                }
+            }
+        }
+    }
+
     @Override
     public void removeNotify() {
         stopRenderThread();
+        renderer.shutdown();
         super.removeNotify();
     }
 
@@ -341,7 +344,7 @@ public final class MandelbrotPanel extends JPanel
      * Shift + T Decrease thread count
      * C         Increase max iterations
      * Shift + C Decrease max iterations
-     * B         Run benchmark
+     * B         Run benchmark with current settings
      * Shift     Temporarily switch from zoom rectangle to pan mode
      */
     @Override
@@ -444,7 +447,7 @@ public final class MandelbrotPanel extends JPanel
         }
     }
 
-    public void runBenchmark() throws InterruptedException {
+    private void runBenchmark() throws InterruptedException {
         RenderSettings settings = new RenderSettings(
                 maxCount,
                 numberOfThreads,
@@ -457,16 +460,19 @@ public final class MandelbrotPanel extends JPanel
         );
 
         MandelbrotRenderer benchmarkRenderer = new MandelbrotRenderer(colors);
+        try {
+            MandelbrotBenchmark benchmark = new MandelbrotBenchmark(
+                    benchmarkRenderer,
+                    getWidth(),
+                    getHeight(),
+                    settings
+            );
 
-        MandelbrotBenchmark benchmark = new MandelbrotBenchmark(
-                benchmarkRenderer,
-                getWidth(),
-                getHeight(),
-                settings
-        );
-
-        MandelbrotBenchmark.BenchmarkResult result = benchmark.run();
-        result.print();
+            MandelbrotBenchmark.BenchmarkResult result = benchmark.run();
+            result.print();
+        } finally {
+            benchmarkRenderer.shutdown();
+        }
     }
 
     @Override

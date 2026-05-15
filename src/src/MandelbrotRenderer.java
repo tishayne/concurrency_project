@@ -13,22 +13,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class MandelbrotRenderer {
 
     private final Color[][] colors;
+    private ExecutorService executor;
+    private int executorThreadsCount = -1;
 
     public MandelbrotRenderer(Color[][] colors) {
         this.colors = colors;
     }
 
-    public RenderResult render(int width, int height, RenderSettings settings) throws InterruptedException {
+    public synchronized RenderResult render(int width, int height, RenderSettings settings) throws InterruptedException {
         if (Thread.currentThread().isInterrupted()) {
             throw new InterruptedException("Render was cancelled before it started.");
         }
 
-        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        int[] pixels = new int[width * height];
 
         long startTime = System.nanoTime();
 
         int threads = Math.max(1, Math.min(settings.numberOfThreads, height));
-        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        ExecutorService executor = getExecutor(threads);
 
         // Atomic Ticket Machine: each thread atomically gets the next row to render until all rows are done.
         // This allows for better load balancing if some rows take longer to render than others.
@@ -48,7 +50,7 @@ public final class MandelbrotRenderer {
                         break;
                     }
 
-                    renderRow(y, width, height, image, settings);
+                    renderRow(y, width, height, pixels, settings);
                 }
 
                 return null;
@@ -78,9 +80,10 @@ public final class MandelbrotRenderer {
         } catch (InterruptedException e) {
             executor.shutdownNow();
             throw e;
-        } finally {
-            executor.shutdownNow();
         }
+
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        image.setRGB(0, 0, width, height, pixels, 0, width);
 
         long endTime = System.nanoTime();
         long renderTimeMs = (endTime - startTime) / 1_000_000;
@@ -92,7 +95,7 @@ public final class MandelbrotRenderer {
             int y,
             int width,
             int height,
-            BufferedImage image,
+            int[] pixels,
             RenderSettings settings
     ) throws InterruptedException {
         double r = settings.zoom / Math.min(width, height);
@@ -115,7 +118,7 @@ public final class MandelbrotRenderer {
                 color = antialiasColor(dx, dy, r, color, settings);
             }
 
-            image.setRGB(x, y, color.getRGB());
+            pixels[y * width + x] = color.getRGB();
         }
     }
 
@@ -182,5 +185,26 @@ public final class MandelbrotRenderer {
 
         return 256 * count
                + (int) (255.0 * Math.log(4 / zM2) / Math.log((zRe2 + zIm2) / zM2));
+    }
+
+    private ExecutorService getExecutor(int threads) {
+        if (executor == null || executor.isShutdown() || executorThreadsCount != threads) {
+            if (executor != null) {
+                executor.shutdownNow();
+            }
+
+            executor = Executors.newFixedThreadPool(threads);
+            executorThreadsCount = threads;
+        }
+
+        return executor;
+    }
+
+    public synchronized void shutdown() {
+        if (executor != null) {
+            executor.shutdownNow();
+            executor = null;
+            executorThreadsCount = -1;
+        }
     }
 }
