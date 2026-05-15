@@ -33,8 +33,7 @@ To run the benchmark:
 3. Press the **B** key.
 4. The benchmark result with the current render settings is printed in the console.
 
-The benchmark compares the render time with **1 thread** against current number of threads in the application. However this
-setting can be changed in the code where indicated. 
+The benchmark compares the render time with **1 thread** against current number of threads in the application.
 
 Example console output:
 
