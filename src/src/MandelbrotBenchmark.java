@@ -35,17 +35,17 @@ public class MandelbrotBenchmark {
                 measuredRuns
         );
 
-        long fourThreadAverage = averageRenderTime(
+        long multipleThreadAverage = averageRenderTime(
                 multipleThreadsSettings,
                 warmupRuns,
                 measuredRuns
         );
 
-        double speedup = (double) oneThreadAverage / fourThreadAverage;
+        double speedup = (double) oneThreadAverage / multipleThreadAverage;
 
         return new BenchmarkResult(
                 oneThreadAverage,
-                fourThreadAverage,
+                multipleThreadAverage,
                 speedup,
                 baseSettings
         );
@@ -87,18 +87,18 @@ public class MandelbrotBenchmark {
     public static final class BenchmarkResult {
 
         private final long oneThreadTimeMs;
-        private final long fourThreadTimeMs;
+        private final long multipleThreadTimeMs;
         private final double speedup;
         private final RenderSettings settings;
 
         public BenchmarkResult(
                 long oneThreadTimeMs,
-                long fourThreadTimeMs,
+                long multipleThreadTimeMs,
                 double speedup,
                 RenderSettings settings
         ) {
             this.oneThreadTimeMs = oneThreadTimeMs;
-            this.fourThreadTimeMs = fourThreadTimeMs;
+            this.multipleThreadTimeMs = multipleThreadTimeMs;
             this.speedup = speedup;
             this.settings = settings;
         }
@@ -107,7 +107,7 @@ public class MandelbrotBenchmark {
         public void print() {
             System.out.println("===== Mandelbrot Benchmark =====");
             System.out.println("Average render time with " + 1 + " thread:  " + oneThreadTimeMs + " ms");
-            System.out.println("Average render time with "  + settings.numberOfThreads + " threads: " + fourThreadTimeMs + " ms");
+            System.out.println("Average render time with " + settings.numberOfThreads + " threads: " + multipleThreadTimeMs + " ms");
             System.out.printf("Speedup: %.2fx%n", speedup);
             System.out.println("Iterations: " + settings.maxCount);
         }
