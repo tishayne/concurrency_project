@@ -25,9 +25,9 @@ public class MandelbrotBenchmark {
         int warmupRuns = 2;
         int measuredRuns = 5;
 
-        // This could also be changed to test different thread counts.
+        // This could also be changed to test against different thread counts.
         RenderSettings oneThreadSettings = copyWithThreads(baseSettings, 1);
-        RenderSettings fourThreadSettings = copyWithThreads(baseSettings, baseSettings.numberOfThreads);
+        RenderSettings multipleThreadsSettings = copyWithThreads(baseSettings, baseSettings.numberOfThreads);
 
         long oneThreadAverage = averageRenderTime(
                 oneThreadSettings,
@@ -36,7 +36,7 @@ public class MandelbrotBenchmark {
         );
 
         long fourThreadAverage = averageRenderTime(
-                fourThreadSettings,
+                multipleThreadsSettings,
                 warmupRuns,
                 measuredRuns
         );
